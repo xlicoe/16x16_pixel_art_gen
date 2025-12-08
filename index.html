@@ -8,8 +8,9 @@
         :root {
             --bg-color: #f8fafc;
             --card-bg: #ffffff;
-            --primary: #3b82f6;
-            --primary-hover: #2563eb;
+            /* Changed primary from blue (#3b82f6) to a dark slate gray (#475569) */
+            --primary: #475569;
+            --primary-hover: #334155;
             --text-main: #1e293b;
             --text-sub: #64748b;
             --border: #e2e8f0;
@@ -57,10 +58,15 @@
             border: 4px solid var(--text-main);
             border-radius: 4px;
             display: inline-block;
-            margin-bottom: 1rem;
+            margin-bottom: 0.5rem;
             line-height: 0; /* fixes vertical spacing issues with canvas */
             position: relative;
             cursor: crosshair;
+            transition: border-color 0.2s;
+        }
+        
+        .canvas-wrapper:hover {
+            border-color: var(--primary);
         }
 
         /* Crucial CSS for Pixel Art:
@@ -193,8 +199,28 @@
         .grid-hint {
             font-size: 0.75rem;
             color: var(--text-sub);
-            margin-top: 5px;
+            margin-bottom: 5px;
             text-align: center;
+        }
+
+        .edit-hint {
+            font-size: 0.75rem;
+            color: var(--primary);
+            font-weight: 600;
+            /* Updated background rgba to match the new slate gray (71, 85, 105) */
+            background-color: rgba(71, 85, 105, 0.1);
+            padding: 4px 8px;
+            border-radius: 4px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .pixel-emoji {
+            width: 14px;
+            height: 14px;
+            image-rendering: pixelated;
+            fill: var(--text-main);
         }
 
         /* Placeholder state */
@@ -290,15 +316,23 @@
                     <circle cx="8.5" cy="8.5" r="1.5"></circle>
                     <polyline points="21 15 16 10 5 21"></polyline>
                 </svg>
-                <span style="font-size: 0.8rem; margin-top: 8px;">No Image</span>
+                <span style="font-size: 0.8rem; margin-top: 8px;">Upload or Click to Draw</span>
             </div>
         </div>
-        <div class="grid-hint">Actual size: 16x16px (Scaled 16x for preview)</div>
+        <div class="grid-hint">
+            <span class="edit-hint">
+                <svg class="pixel-emoji" viewBox="0 0 14 14" xmlns="http://www.w3.org/2000/svg">
+                    <!-- Pixel Art Pointer Arrow (Stepped Triangle) -->
+                    <path d="M3 2v10h2v-2h2v-2h2v-2h2v-4h-8z"/>
+                </svg>
+                Click pixels to edit (Border is locked)
+            </span>
+        </div>
 
         <div class="controls">
             <!-- Upload -->
             <div class="file-upload">
-                <label class="file-label" for="imageInput">1. Upload Image</label>
+                <label class="file-label" for="imageInput">1. Upload Image (Optional)</label>
                 <input type="file" id="imageInput" accept="image/*">
             </div>
 
@@ -328,7 +362,7 @@
                 <label class="output-label" for="arrayOutput">Binary Array (1=Black, 0=White)</label>
                 <button id="copyBtn" class="btn-copy">Copy Code</button>
             </div>
-            <textarea id="arrayOutput" readonly placeholder="Upload an image to see the array data here..."></textarea>
+            <textarea id="arrayOutput" readonly placeholder="Upload image or click canvas to generate code..."></textarea>
         </div>
     </div>
 
@@ -356,8 +390,7 @@
                 const img = new Image();
                 img.onload = () => {
                     originalImage = img;
-                    emptyState.classList.add('hidden'); // Hide placeholder
-                    downloadBtn.removeAttribute('disabled'); // Enable download
+                    activateCanvas();
                     processImage();
                 };
                 img.src = event.target.result;
@@ -372,8 +405,18 @@
             }
         });
 
+        // Click to Touch-up / Draw
+        canvas.addEventListener('mousedown', (e) => {
+            // If empty, initialize white canvas
+            if (!downloadBtn.disabled === false && !originalImage) {
+                 initBlankCanvas();
+                 activateCanvas();
+            }
+
+            handleCanvasClick(e);
+        });
+
         downloadBtn.addEventListener('click', () => {
-            if (!originalImage) return;
             const link = document.createElement('a');
             link.download = 'pixel-art-16x16.png';
             link.href = canvas.toDataURL('image/png');
@@ -392,7 +435,57 @@
             }, 2000);
         });
 
-        // --- Core Processing Logic ---
+        // --- Helper Functions ---
+
+        function activateCanvas() {
+            emptyState.classList.add('hidden'); 
+            downloadBtn.removeAttribute('disabled');
+        }
+
+        function initBlankCanvas() {
+            ctx.fillStyle = "white";
+            ctx.fillRect(0,0,16,16);
+            updateOutput();
+        }
+
+        // --- Editing Logic ---
+
+        function handleCanvasClick(e) {
+            const rect = canvas.getBoundingClientRect();
+            
+            // Calculate 16x16 grid coordinate
+            // Map the click (0-256) down to (0-16)
+            const x = Math.floor((e.clientX - rect.left) * (16 / rect.width));
+            const y = Math.floor((e.clientY - rect.top) * (16 / rect.height));
+
+            // Enforce Border Rule: Do not allow editing the 1px frame
+            if (x === 0 || x === 15 || y === 0 || y === 15) {
+                return; // Locked border
+            }
+
+            // Get current pixel
+            const imageData = ctx.getImageData(x, y, 1, 1);
+            const currentR = imageData.data[0];
+            
+            // Toggle: If black (0), make white (255). If white (255), make black (0).
+            // Treating < 128 as black
+            const isBlack = currentR < 128;
+            const newColor = isBlack ? 255 : 0;
+            
+            // Fill pixel
+            const id = ctx.createImageData(1, 1);
+            const d = id.data;
+            d[0] = newColor; // R
+            d[1] = newColor; // G
+            d[2] = newColor; // B
+            d[3] = 255;      // A
+            ctx.putImageData(id, x, y);
+
+            // Re-generate array output immediately
+            updateOutput();
+        }
+
+        // --- Processing Logic ---
 
         function processImage() {
             if (!originalImage) return;
@@ -407,60 +500,59 @@
 
             ctx.drawImage(originalImage, sx, sy, size, size, 0, 0, 16, 16);
 
-            // 3. THRESHOLD (B&W Conversion) & ARRAY GENERATION
+            // 3. THRESHOLD LOOP
             const imageData = ctx.getImageData(0, 0, 16, 16);
             const data = imageData.data;
             const threshold = parseInt(thresholdInput.value);
 
-            let binaryMatrix = [];
-            let currentRow = [];
-
-            // Iterate over every pixel (RGBA = 4 values per pixel)
             for (let i = 0; i < data.length; i += 4) {
                 const r = data[i];
                 const g = data[i + 1];
                 const b = data[i + 2];
-                // alpha (data[i+3]) is ignored
 
-                // Calculate X and Y to determine if we are on the border
                 const pixelIndex = i / 4;
                 const x = pixelIndex % 16;
                 const y = Math.floor(pixelIndex / 16);
                 
-                // Border condition: first row, last row, first col, or last col
+                // Border condition
                 const isBorder = (x === 0 || x === 15 || y === 0 || y === 15);
 
-                // Luminance formula
                 const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
 
-                // Determine Black (1) or White (0)
-                // If it is a border, FORCE it to be White (false), otherwise check threshold
+                // Force border white, else use threshold
                 const isBlack = isBorder ? false : (luminance < threshold);
                 
-                // --- VISUAL UPDATE ---
                 const color = isBlack ? 0 : 255;
-                data[i]     = color; // R
-                data[i + 1] = color; // G
-                data[i + 2] = color; // B
-                data[i + 3] = 255;   // Alpha
+                data[i]     = color; 
+                data[i + 1] = color; 
+                data[i + 2] = color; 
+                data[i + 3] = 255;   
+            }
 
-                // --- ARRAY DATA UPDATE ---
-                // User requested: 1 = Black, 0 = White
-                const bit = isBlack ? 1 : 0;
-                
-                currentRow.push(bit);
+            // Write back processed pixels
+            ctx.putImageData(imageData, 0, 0);
 
-                // If row is full (16 items), push to matrix and reset
+            // 4. Generate Text Output
+            updateOutput();
+        }
+
+        function updateOutput() {
+            const imageData = ctx.getImageData(0, 0, 16, 16);
+            const data = imageData.data;
+            let binaryMatrix = [];
+            let currentRow = [];
+
+            for (let i = 0; i < data.length; i += 4) {
+                // Read red channel. < 128 is Black (1), >= 128 is White (0)
+                const isBlack = data[i] < 128;
+                currentRow.push(isBlack ? 1 : 0);
+
                 if (currentRow.length === 16) {
                     binaryMatrix.push(currentRow);
                     currentRow = [];
                 }
             }
 
-            // Put image back on canvas
-            ctx.putImageData(imageData, 0, 0);
-
-            // Update Textarea with 2D Array format
             const formattedArray = "[\n" + binaryMatrix.map(row => "  [" + row.join(", ") + "]").join(",\n") + "\n]";
             arrayOutput.value = formattedArray;
         }
