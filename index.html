@@ -422,11 +422,20 @@
                 const b = data[i + 2];
                 // alpha (data[i+3]) is ignored
 
+                // Calculate X and Y to determine if we are on the border
+                const pixelIndex = i / 4;
+                const x = pixelIndex % 16;
+                const y = Math.floor(pixelIndex / 16);
+                
+                // Border condition: first row, last row, first col, or last col
+                const isBorder = (x === 0 || x === 15 || y === 0 || y === 15);
+
                 // Luminance formula
                 const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
 
                 // Determine Black (1) or White (0)
-                const isBlack = luminance < threshold;
+                // If it is a border, FORCE it to be White (false), otherwise check threshold
+                const isBlack = isBorder ? false : (luminance < threshold);
                 
                 // --- VISUAL UPDATE ---
                 const color = isBlack ? 0 : 255;
