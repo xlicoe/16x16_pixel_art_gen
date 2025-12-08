@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>16x16 Pixel Art Generator</title>
+    <style>
+        :root {
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --text-main: #1e293b;
+            --text-sub: #64748b;
+            --border: #e2e8f0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            background: var(--card-bg);
+            padding: 2rem;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 450px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+            color: var(--text-main);
+        }
+
+        p {
+            color: var(--text-sub);
+            font-size: 0.9rem;
+            margin-bottom: 1.5rem;
+        }
+
+        /* The wrapper for the visual output */
+        .canvas-wrapper {
+            background-color: #e5e7eb; /* slight gray background to see transparency if needed */
+            border: 4px solid var(--text-main);
+            border-radius: 4px;
+            display: inline-block;
+            margin-bottom: 1rem;
+            line-height: 0; /* fixes vertical spacing issues with canvas */
+            position: relative;
+            cursor: crosshair;
+        }
+
+        /* Crucial CSS for Pixel Art:
+           image-rendering: pixelated prevents blurring when we scale up 
+        */
+        canvas {
+            width: 256px; /* 16px * 16 scale factor */
+            height: 256px;
+            image-rendering: pixelated; 
+            image-rendering: crisp-edges;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+            text-align: left;
+        }
+
+        /* File Input Styling */
+        .file-upload {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .file-label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        input[type="file"] {
+            font-size: 0.9rem;
+            color: var(--text-sub);
+            file-selector-button {
+                background-color: var(--bg-color);
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                padding: 0.4rem 0.8rem;
+                margin-right: 1rem;
+                cursor: pointer;
+                transition: all 0.2s;
+                font-weight: 500;
+            }
+            file-selector-button:hover {
+                background-color: #e2e8f0;
+            }
+        }
+
+        /* Slider Styling */
+        .slider-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .slider-label {
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .slider-value {
+            font-size: 0.85rem;
+            font-family: monospace;
+            background: var(--text-main);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #cbd5e1;
+            border-radius: 2px;
+        }
+
+        /* Download Button */
+        .btn-download {
+            background-color: var(--text-main);
+            color: white;
+            border: none;
+            padding: 0.75rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .btn-download:hover {
+            background-color: #334155;
+        }
+
+        .btn-download:disabled {
+            background-color: #cbd5e1;
+            cursor: not-allowed;
+        }
+
+        .grid-hint {
+            font-size: 0.75rem;
+            color: var(--text-sub);
+            margin-top: 5px;
+            text-align: center;
+        }
+
+        /* Placeholder state */
+        .empty-state {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #94a3b8;
+            background: #f1f5f9;
+            pointer-events: none;
+        }
+        .hidden {
+            display: none;
+        }
+
+        /* Array Output Section */
+        .output-section {
+            width: 100%;
+            margin-top: 2rem;
+            border-top: 1px solid var(--border);
+            padding-top: 1.5rem;
+            text-align: left;
+        }
+
+        .output-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .output-label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .btn-copy {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 0.3rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+
+        .btn-copy:hover {
+            background: #f1f5f9;
+            border-color: var(--text-sub);
+        }
+
+        textarea {
+            width: 100%;
+            height: 150px;
+            background: #1e293b;
+            color: #bef264;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.75rem;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            resize: vertical;
+            box-sizing: border-box;
+            white-space: pre;
+        }
+        textarea:focus {
+            outline: 2px solid var(--primary);
+            border-color: transparent;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Pixel Art Converter</h1>
+        <p>Turn any image into a 16x16 B&W sprite.</p>
+
+        <!-- Preview Area -->
+        <div class="canvas-wrapper">
+            <canvas id="pixelCanvas" width="16" height="16"></canvas>
+            <div id="emptyState" class="empty-state">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                    <polyline points="21 15 16 10 5 21"></polyline>
+                </svg>
+                <span style="font-size: 0.8rem; margin-top: 8px;">No Image</span>
+            </div>
+        </div>
+        <div class="grid-hint">Actual size: 16x16px (Scaled 16x for preview)</div>
+
+        <div class="controls">
+            <!-- Upload -->
+            <div class="file-upload">
+                <label class="file-label" for="imageInput">1. Upload Image</label>
+                <input type="file" id="imageInput" accept="image/*">
+            </div>
+
+            <!-- Threshold Slider -->
+            <div class="slider-group">
+                <div class="slider-header">
+                    <label class="slider-label" for="threshold">2. Threshold (Dark/Light)</label>
+                    <span id="thresholdValue" class="slider-value">128</span>
+                </div>
+                <input type="range" id="threshold" min="0" max="255" value="128">
+            </div>
+
+            <!-- Download Button -->
+            <button id="downloadBtn" class="btn-download" disabled>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                Download Sprite
+            </button>
+        </div>
+
+        <!-- Array Output Section -->
+        <div class="output-section">
+            <div class="output-header">
+                <label class="output-label" for="arrayOutput">Binary Array (1=Black, 0=White)</label>
+                <button id="copyBtn" class="btn-copy">Copy Code</button>
+            </div>
+            <textarea id="arrayOutput" readonly placeholder="Upload an image to see the array data here..."></textarea>
+        </div>
+    </div>
+
+    <script>
+        const imageInput = document.getElementById('imageInput');
+        const thresholdInput = document.getElementById('threshold');
+        const thresholdDisplay = document.getElementById('thresholdValue');
+        const canvas = document.getElementById('pixelCanvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const downloadBtn = document.getElementById('downloadBtn');
+        const emptyState = document.getElementById('emptyState');
+        const arrayOutput = document.getElementById('arrayOutput');
+        const copyBtn = document.getElementById('copyBtn');
+
+        let originalImage = null;
+
+        // --- Event Listeners ---
+
+        imageInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    originalImage = img;
+                    emptyState.classList.add('hidden'); // Hide placeholder
+                    downloadBtn.removeAttribute('disabled'); // Enable download
+                    processImage();
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        thresholdInput.addEventListener('input', (e) => {
+            thresholdDisplay.textContent = e.target.value;
+            if (originalImage) {
+                processImage();
+            }
+        });
+
+        downloadBtn.addEventListener('click', () => {
+            if (!originalImage) return;
+            const link = document.createElement('a');
+            link.download = 'pixel-art-16x16.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        });
+
+        copyBtn.addEventListener('click', () => {
+            if (!arrayOutput.value) return;
+            arrayOutput.select();
+            document.execCommand('copy');
+            
+            const originalText = copyBtn.textContent;
+            copyBtn.textContent = "Copied!";
+            setTimeout(() => {
+                copyBtn.textContent = originalText;
+            }, 2000);
+        });
+
+        // --- Core Processing Logic ---
+
+        function processImage() {
+            if (!originalImage) return;
+
+            // 1. CLEAR Canvas
+            ctx.clearRect(0, 0, 16, 16);
+
+            // 2. CROP & SCALE
+            const size = Math.min(originalImage.width, originalImage.height);
+            const sx = (originalImage.width - size) / 2;
+            const sy = (originalImage.height - size) / 2;
+
+            ctx.drawImage(originalImage, sx, sy, size, size, 0, 0, 16, 16);
+
+            // 3. THRESHOLD (B&W Conversion) & ARRAY GENERATION
+            const imageData = ctx.getImageData(0, 0, 16, 16);
+            const data = imageData.data;
+            const threshold = parseInt(thresholdInput.value);
+
+            let binaryMatrix = [];
+            let currentRow = [];
+
+            // Iterate over every pixel (RGBA = 4 values per pixel)
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+                // alpha (data[i+3]) is ignored
+
+                // Luminance formula
+                const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+
+                // Determine Black (1) or White (0)
+                const isBlack = luminance < threshold;
+                
+                // --- VISUAL UPDATE ---
+                const color = isBlack ? 0 : 255;
+                data[i]     = color; // R
+                data[i + 1] = color; // G
+                data[i + 2] = color; // B
+                data[i + 3] = 255;   // Alpha
+
+                // --- ARRAY DATA UPDATE ---
+                // User requested: 1 = Black, 0 = White
+                const bit = isBlack ? 1 : 0;
+                
+                currentRow.push(bit);
+
+                // If row is full (16 items), push to matrix and reset
+                if (currentRow.length === 16) {
+                    binaryMatrix.push(currentRow);
+                    currentRow = [];
+                }
+            }
+
+            // Put image back on canvas
+            ctx.putImageData(imageData, 0, 0);
+
+            // Update Textarea with 2D Array format
+            const formattedArray = "[\n" + binaryMatrix.map(row => "  [" + row.join(", ") + "]").join(",\n") + "\n]";
+            arrayOutput.value = formattedArray;
+        }
+    </script>
+</body>
+</html>
